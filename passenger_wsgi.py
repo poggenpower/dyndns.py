@@ -16,10 +16,10 @@ def application (environ, start_response):
     response_body = [ ] 
 
     qs = parse_qs(environ['QUERY_STRING'])
-    # response_body.append('################# Query String #################')
-    # response_body.extend(
-    #     ['%s: %s' % (key, value) for key, value in sorted(qs.items())]
-    # )
+    response_body.append('################# Query String #################')
+    response_body.extend(
+        ['%s: %s' % (key, value) for key, value in sorted(qs.items())]
+    )
 
     response_body.append('################# DynDNS Response #################')
     # get first element of list per qs variable 
