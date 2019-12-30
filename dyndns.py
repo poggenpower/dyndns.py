@@ -236,10 +236,10 @@ def read_queued_files(entries):
 
 class Watcher:
     DIRECTORY_TO_WATCH = get_queue_path(os.path.dirname(os.path.realpath(__file__)))
-    timeout = -1
 
     def __init__(self):
         self.observer = Observer()
+        self.timeout = -1
 
     def run(self):
         runtime = 0
@@ -252,9 +252,9 @@ class Watcher:
                 runtime += 5
                 if runtime > self.timeout and self.timeout > 0:
                     break
-        except:
+        except Exception as e:
             self.observer.stop()
-            print("Error")
+            logging.exception("Error while watching queue dir.")
 
         self.observer.stop()
 
@@ -282,7 +282,7 @@ class Handler(FileSystemEventHandler):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='dyndns sever - server side process')
 
-    parser.add_argument('--timeout', action="store", type=int, help='Seconds until automatic termination. Use if you run via cron job')
+    parser.add_argument('--timeout', action="store", default=-1, type=int, help='Seconds until automatic termination. Use if you run via cron job')
     parser.add_argument('--runonce', action="store_true", default=False, help='Process pending files and stop, no monitoring')
     args = parser.parse_args()
 
