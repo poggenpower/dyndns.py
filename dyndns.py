@@ -102,7 +102,7 @@ def write_queue_file(path, host, ip, type):
         with open(file_name, 'w') as queue_file:
             queue_file.write('{},{},{}'.format(host, ip, type))
     except IOError:
-        return "Can't access {}, create directory and make sure parmissions are set correct.".format(file_name)
+        return "Can't access {}, create directory and make sure permissions are set correct.".format(file_name)
     return "Update for {} queued".format(host)
 
 

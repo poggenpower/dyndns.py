@@ -16,12 +16,12 @@ The script `dyndns.py` covers most of the two tasks.
 - DNS manged by plesk 
   - subdomain for dynamic records recommended
   - dynmic DNS records must be created manually before updated by this script
-- webserver running python via WSIG 
+- webserver running python via WSIG, tested with phusion passenger  
 - root access to your server
 
 
 ### 1. Web Interface
-
+#### Installation
 As plesk offers WSGI support via passenger, follow mainly this description to install python3, virtualenv and passenger: https://support.plesk.com/hc/en-us/articles/115002701209-How-to-allow-installing-and-install-Django-applications-
 For me it was necessary to set the `PassengerAppRoot`.
 Here the additional directive for Apache.
@@ -42,6 +42,23 @@ Rename `dyndns_config.py.sample` to `dyndns_config.py` and customizes to your ne
 The `passenger_wsgi.py` is customized with the function `application` which calles the `update` function in dyndns.py with the right parameters. If you using another WSIG server, this funktion may need some customizations. 
 
 Make sure you have created the queue directory you have specified in `dyndns_config.py`.
+
+#### Usage
+
+Example:
+
+`https://dyn.example.com/?host=host.dyn.example.com&ipv4=123.123.123.123&ipv6=1234:1234::1234&use_source=False`
+
+Call the web interface with following parameters:
+
+- `host`: FQDN of the DNS record you want to update. Make sure it already exists in the plesk DNS settings.
+- `ipv4` (optional): IPv4 address for the `A` record
+- `ipv6` (optional): IPv6 address for the `AAAA` record. (`ipv4` and `ipv6` can be given at the same time)
+- `use_source` (optional): if set to `True` there is no need to give the address via parameter. The source address of the request is used automatically. `use_source` has precedence, it overwrites either `ipv4` or `ipv6` if given.  
+
+Response:
+- `"Update for {} queued"`
+- `"No update needed, ip {} already set"`
 
 ### 2. Background Job
 
