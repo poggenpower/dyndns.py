@@ -11,13 +11,25 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import argparse
 import logging
-logging.basicConfig(level=dyndns_config.loglevel)
+
+log_file_name = os.path.splitext(os.path.basename(__file__))[0]
+logging.basicConfig(
+    level=dyndns_config.loglevel,
+    format="%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s",
+    handlers=[
+        logging.FileHandler("{0}.log".format(log_file_name)),
+        logging.StreamHandler()
+    ]
+)
 
 
-def update(host="NOTHING", ipv4=None, ipv6=None, use_source=False):
+def update(host="NOTHING", ipv4=None, ipv6=None, use_source=False, user=None):
     result = 'host: {}, IPv4: {}, IPv6: {}\n'.format(
         host, is_valid_ipv4_address(ipv4), is_valid_ipv6_address(ipv6))
     # result += '{}/n {}/n'.format(dir(req), req.document_root())
+    if not validate_user(host, user):
+        return "User {} not authorized".format(user)
+
     if use_source:
         ip = use_source
         if ':' in ip:
@@ -46,6 +58,28 @@ def update(host="NOTHING", ipv4=None, ipv6=None, use_source=False):
             result += "Can't resolve {}, wrong format. ".format(host)
 
     return result
+
+
+def validate_user(host, user):
+    if dyndns_config.disable_user_authorization:
+        logging.warning("User authorization disabled. Any user even anonymous is allowed!")
+        return True
+    if user in dyndns_config.full_access_user:
+        logging.info("User {} is allowed to change any record.".format(user))
+        return True
+    if user in dyndns_config.domain_access_user:
+        if user.endswith(domain_from_fqdn(host)):
+            logging.info('User {} is allowed to change any record in {}'.format(user, domain_from_fqdn(host)))
+            return True
+        else:
+            logging.warning('User {} not authorized for domain {}'.format(user, domain_from_fqdn(host)))
+            return False
+    if user.replace('@', '.').lower == host.rstrip('.'):
+        logging.debug('User {} allowed to update {}.'.format(user, host))
+        return True
+    else:
+        logging.warning("User {} doesn't match {}, access denied.".format(user, host))
+        return False
 
 
 def dns_is_changed(host, ip):
@@ -145,13 +179,17 @@ def __change_plesk_dns(cmd, domain, host, ip, type):
     return exit
 
 
+def domain_from_fqdn(fqdn):
+    return fqdn.rstrip('.').split('.', 1)[1]
+
+
 def __update_plesk(host, ip, type):
     if not host.endswith('.'):
         host = host + '.'
     if not is_resolvable(host):
         logging.error('Host {} is not resolvable, ignore')
         return False
-    domain = host.rstrip('.').split('.', 1)[1]
+    domain = domain_from_fqdn(host)
 
     if domain not in dyndns_config.dyn_dns_domains:
         logging.error('Domain {} not allowed for dynamic updates.'.format(domain))
@@ -250,7 +288,7 @@ class Watcher:
             while True:
                 time.sleep(5)
                 runtime += 5
-                if runtime > self.timeout and self.timeout > 0:
+                if runtime > self.timeout > 0:
                     break
         except Exception as e:
             self.observer.stop()
@@ -282,8 +320,10 @@ class Handler(FileSystemEventHandler):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='dyndns sever - server side process')
 
-    parser.add_argument('--timeout', action="store", default=-1, type=int, help='Seconds until automatic termination. Use if you run via cron job')
-    parser.add_argument('--runonce', action="store_true", default=False, help='Process pending files and stop, no monitoring')
+    parser.add_argument('--timeout', action="store", default=-1, type=int,
+                        help='Seconds until automatic termination. Use if you run via cron job')
+    parser.add_argument('--runonce', action="store_true", default=False,
+                        help='Process pending files and stop, no monitoring')
     args = parser.parse_args()
 
     if args.runonce:
