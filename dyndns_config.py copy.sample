@@ -1,5 +1,0 @@
-import logging
-dyn_dns_domains = ['dyn.schmu.net']
-# relative path to dyndns.py or absolute path, make sure your webserver has write permissions.
-queue_dir = '../queue'
-loglevel = logging.INFO
