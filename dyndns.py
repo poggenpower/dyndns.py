@@ -6,6 +6,8 @@ import subprocess
 import tempfile
 from stat import S_ISREG, ST_CTIME, ST_MODE
 import time
+import smtplib, ssl
+
 from collections import namedtuple
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -61,6 +63,18 @@ def update(host="NOTHING", ipv4=None, ipv6=None, use_source=False, user=None):
 
 
 def validate_user(host, user):
+    '''
+    host: fqdn of the record that will be set
+    user: typically user@dyn.domain.com 
+
+    Return True, if
+     - User Auth disabled dyndns_config.disable_user_authorization = True
+     - user has full rights, user in dyndns_config.full_access_user
+     - user is allowed for this domain, user in dyndns_config.domain_access_user and
+       domain part matches host and user
+     - host matches the user, "test.dyndns.example.com" == "test@dyndns.example.com"
+
+    '''
     if dyndns_config.disable_user_authorization:
         logging.warning("User authorization disabled. Any user even anonymous is allowed!")
         return True
@@ -74,7 +88,7 @@ def validate_user(host, user):
         else:
             logging.warning('User {} not authorized for domain {}'.format(user, domain_from_fqdn(host)))
             return False
-    if user.replace('@', '.').lower == host.rstrip('.'):
+    if user.replace('@', '.').lower() == host.rstrip('.'):
         logging.debug('User {} allowed to update {}.'.format(user, host))
         return True
     else:
@@ -180,6 +194,11 @@ def __change_plesk_dns(cmd, domain, host, ip, type):
 
 
 def domain_from_fqdn(fqdn):
+    """
+    strips of hostname from FQDN. 
+    Strips also pending `.` if there
+    If there is no hostpart `IndexError` will be thrown
+    """
     return fqdn.rstrip('.').split('.', 1)[1]
 
 
@@ -249,6 +268,7 @@ def get_queued_files():
 
 
 def read_queued_files(entries):
+    updates = {}
     for cdate, path in sorted(entries):
         logging.debug('{}\t{}'.format(time.ctime(cdate), path))
         with open(path, 'r') as dns_update:
@@ -262,14 +282,25 @@ def read_queued_files(entries):
             if not is_valid_ipv4_address(ip):
                 logging.error('IP {}, is not valid, ignore'.format(ip))
                 continue
-        if type == 'AAAA':
+        elif type == 'AAAA':
             if not is_valid_ipv6_address(ip):
                 logging.error('IP {}, is not valid, ignore'.format(ip))
                 continue
+        updates[host][type]=ip
         if __update_plesk(host, ip, type):
+            updates[host]['status']=True
             os.remove(path)
         else:
+            updates[host]['status']=False
             os.rename(path, path + '.error')
+
+    for fqdn in updates.keys():
+        send_email_notification(
+            fqdn, 
+            dyndns_config.recipient, 
+            ipv4=updates[fqdn].get('A',    'No Update'), 
+            ipv6=updates[fqdn].get('AAAA', 'No Update'),
+        )
 
 
 class Watcher:
@@ -292,7 +323,7 @@ class Watcher:
                     break
         except Exception as e:
             self.observer.stop()
-            logging.exception("Error while watching queue dir.")
+            logging.exception("Error while watching queue dir. ERROR: {}".format(e))
 
         self.observer.stop()
 
@@ -315,6 +346,39 @@ class Handler(FileSystemEventHandler):
         elif event.event_type == 'modified':
             # Taken any action here when a file is modified.
             logging.debug("Received modified event - %s." % event.src_path)
+
+
+def send_email_notification(fqdn, recipient,ipv4="Not updated", ipv6="Not updated"):
+    if not dyndns_config.smtp_enable:
+        return
+    for smtp_cfg in ('smtp_server', 'smtp_port', 'smtp_mode', 'smtp_sender'):
+        if not hasattr(dyndns_config, smtp_cfg):
+            logging.error("SMTP setting missing. Please provide: {}".format(smtp_cfg))
+            return
+    if dyndns_config.smtp_mode == 'ssl':
+        # Create a secure SSL context
+        context = ssl.create_default_context()
+        smtp_server = smtplib.SMTP_SSL
+    else:
+        context = None
+        smtp_server = smtplib.SMTP
+
+    msg = """Subject: DYNDNS update: {fqdn}
+    Dear Admin,
+
+    we have updated your DNS record for {fqdn}
+    new IPv4 address: {IPv4}
+    new IPv6 address: {IPv6}
+
+    Bye
+      Your DYN DNS Service
+    """.format(fqdn=fqdn, IPv4=ipv4, IPv6=ipv6)
+
+    with smtp_server(dyndns_config.smtp_server, dyndns_config.smtp_port, context=context) as server:
+        if hasattr(dyndns_config, 'smtp_user') and hasattr(dyndns_config, 'smtp_password'):
+            server.login(dyndns_config.smtp_user, dyndns_config.smtp_password)
+        server.sendmail(dyndns_config.smtp_sender, recipient, msg)
+
 
 
 if __name__ == '__main__':
