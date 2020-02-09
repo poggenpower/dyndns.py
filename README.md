@@ -3,6 +3,10 @@
 WSIG python script to update dns records via plesk.
 
 If your webserver is managed by plesk, this script allows you to provide your own DynDNS service.
+### Features
+- ipv6 and ipv4 support
+- limit user to certain domains or hostrecords
+- Email Notification if record changed
 
 ## Functionality
 
