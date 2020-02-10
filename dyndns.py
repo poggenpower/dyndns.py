@@ -372,6 +372,7 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
         smtp_server = smtplib.SMTP
 
     msg = """Subject: DYNDNS update: {fqdn}
+    
     Dear Admin,
 
     we have updated your DNS record for {fqdn}
