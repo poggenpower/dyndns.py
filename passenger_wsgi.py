@@ -1,19 +1,12 @@
 import os
 import sys
-from urllib.parse import parse_qs
-import dyndns
 
-ApplicationDirectory = 'dyndns'
-ApplicationName = 'dyndns'
-VirtualEnvDirectory = 'python-app-venv'
+VirtualEnvDirectory = 'venv'
 VirtualEnv = os.path.join(os.getcwd(), VirtualEnvDirectory, 'bin', 'python')
 if sys.executable != VirtualEnv: os.execl(VirtualEnv, VirtualEnv, *sys.argv)
-sys.path.insert(0, os.path.join(os.getcwd(), ApplicationDirectory))
-sys.path.insert(0, os.path.join(os.getcwd(), ApplicationDirectory, ApplicationName))
-sys.path.insert(0, os.path.join(os.getcwd(), VirtualEnvDirectory, 'bin'))
 
-
-# os.chdir(os.path.join(os.getcwd(), ApplicationDirectory))
+from urllib.parse import parse_qs
+import dyndns
 
 
 def application(environ, start_response):

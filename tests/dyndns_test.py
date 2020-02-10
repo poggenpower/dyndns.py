@@ -1,9 +1,11 @@
 import pytest
 import dyndns
 
+
 @pytest.mark.parametrize("hostname,expected", [("localhost", True), ("nsnsn schmu.net", False)])
 def test_is_resolvable(hostname, expected):
     assert dyndns.is_resolvable(hostname) == expected
+
 
 @pytest.mark.parametrize("host, user, expected", [
     ('schmu.net', 'test', False),
@@ -19,6 +21,7 @@ def test_validate_user(host, user, expected):
     dyndns_config.full_access_user = ['admin', 'Admin1']
     dyndns_config.domain_access_user = ['d_admin@dyn.example.com']
     assert dyndns.validate_user(host, user) == expected
+
 
 @pytest.mark.parametrize("fqdn, expected", [
     ('dyn.example.com', 'example.com'),
