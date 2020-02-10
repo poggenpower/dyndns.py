@@ -3,3 +3,16 @@ dyn_dns_domains = ['dyn.schmu.net']
 # relative path to dyndns.py or absolute path, make sure your webserver has write permissions.
 queue_dir = '../queue'
 loglevel = logging.INFO
+
+# User Access control
+# Important authentication must be done external via basic auth. This is only mapping permissions
+
+# Only disable if you really know what you are doing. If you have not configured authentication, this will
+# open our domain for any dns change
+# dyndns_config.disable_user_authorization = True
+
+# Users with permissions for any host record in all domains given in `dyn_dns_domains`
+dyndns_config.full_access_user = []
+
+# Users with full access to their domain. Username must be in the format `username@domain`.
+dyndns_config.domain_access_user = []

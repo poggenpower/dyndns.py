@@ -63,9 +63,9 @@ def update(host="NOTHING", ipv4=None, ipv6=None, use_source=False, user=None):
 
 
 def validate_user(host, user):
-    '''
+    """
     host: fqdn of the record that will be set
-    user: typically user@dyn.domain.com 
+    user: typically user@dyn.domain.com
 
     Return True, if
      - User Auth disabled dyndns_config.disable_user_authorization = True
@@ -74,14 +74,14 @@ def validate_user(host, user):
        domain part matches host and user
      - host matches the user, "test.dyndns.example.com" == "test@dyndns.example.com"
 
-    '''
-    if dyndns_config.disable_user_authorization:
+    """
+    if hasattr(dyndns_config, 'disable_user_authorization') and dyndns_config.disable_user_authorization:
         logging.warning("User authorization disabled. Any user even anonymous is allowed!")
         return True
-    if user in dyndns_config.full_access_user:
+    if hasattr(dyndns_config, 'full_access_user') and user in dyndns_config.full_access_user:
         logging.info("User {} is allowed to change any record.".format(user))
         return True
-    if user in dyndns_config.domain_access_user:
+    if hasattr(dyndns_config, 'domain_access_user') and user in dyndns_config.domain_access_user:
         if user.endswith(domain_from_fqdn(host)):
             logging.info('User {} is allowed to change any record in {}'.format(user, domain_from_fqdn(host)))
             return True
