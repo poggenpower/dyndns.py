@@ -298,12 +298,13 @@ def read_queued_files(entries):
             os.rename(path, path + '.error')
 
     for fqdn in updates.keys():
-        send_email_notification(
-            fqdn, 
-            dyndns_config.recipient, 
-            ipv4=updates[fqdn].get('A',    'No Update'), 
-            ipv6=updates[fqdn].get('AAAA', 'No Update'),
-        )
+        if hasattr(dyndns_config, 'smtp_recipient'):
+            send_email_notification(
+                fqdn,
+                dyndns_config.smtp_recipient,
+                ipv4=updates[fqdn].get('A',    'No Update'),
+                ipv6=updates[fqdn].get('AAAA', 'No Update'),
+            )
 
 
 class Watcher:
@@ -351,7 +352,7 @@ class Handler(FileSystemEventHandler):
             logging.debug("Received modified event - %s." % event.src_path)
 
 
-def send_email_notification(fqdn, recipient,ipv4="Not updated", ipv6="Not updated"):
+def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updated"):
     if not dyndns_config.smtp_enable:
         return
     for smtp_cfg in ('smtp_server', 'smtp_port', 'smtp_mode', 'smtp_sender'):
@@ -381,7 +382,6 @@ def send_email_notification(fqdn, recipient,ipv4="Not updated", ipv6="Not update
         if hasattr(dyndns_config, 'smtp_user') and hasattr(dyndns_config, 'smtp_password'):
             server.login(dyndns_config.smtp_user, dyndns_config.smtp_password)
         server.sendmail(dyndns_config.smtp_sender, recipient, msg)
-
 
 
 if __name__ == '__main__':
