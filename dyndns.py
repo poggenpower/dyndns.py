@@ -302,7 +302,7 @@ def read_queued_files(entries):
             os.rename(path, path + '.error')
 
     for fqdn in updates.keys():
-        if hasattr(dyndns_config, 'smtp_recipient'):
+        if hasattr(dyndns_config, 'smtp_enabled') and dyndns_config.smtp_enabled:
             send_email_notification(
                 fqdn,
                 dyndns_config.smtp_recipient,

@@ -19,7 +19,8 @@ dyndns_config.domain_access_user = []
 
 
 ### Email Notification
-## if smtp_recipient is set email notification for changes will be send, other options are also required.
+## if smtp_enable is True email notification for changes will be send, other options are also required.
+# smtp_enable = True
 # smtp_recipient = 'dyndns@example.com'
 # smtp_server = 'smtp.example.com'
 # smtp_port = 465 # 25: plain, 465 for SSL,
