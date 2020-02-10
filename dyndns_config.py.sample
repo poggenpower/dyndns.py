@@ -1,5 +1,32 @@
 import logging
 dyn_dns_domains = ['dyn.schmu.net']
-# relative path to dyndns.py or absulute path, makse sure your webser can write.
+# relative path to dyndns.py or absolute path, make sure your webserver has write permissions.
 queue_dir = '../queue'
 loglevel = logging.INFO
+
+### User Access control
+## Important authentication must be done external via basic auth. This is only mapping permissions
+
+## Only disable if you really know what you are doing. If you have not configured authentication, this will
+## open our domain for any dns change
+# dyndns_config.disable_user_authorization = True
+
+## Users with permissions for any host record in all domains given in `dyn_dns_domains`
+dyndns_config.full_access_user = []
+
+## Users with full access to their domain. Username must be in the format `username@domain`.
+dyndns_config.domain_access_user = []
+
+
+### Email Notification
+## if smtp_enable is True email notification for changes will be send, other options are also required.
+# smtp_enable = True
+# smtp_recipient = 'dyndns@example.com'
+# smtp_server = 'smtp.example.com'
+# smtp_port = 465 # 25: plain, 465 for SSL,
+# smtp_mode = 'ssl' # ssl or plain, if ssl certificate will be validated.
+# smtp_sender = 'dyndns.py@expample.com' # sender of the notification email.
+## If authentication is required you can give the credentials here.
+## If emails delivered locally, authentication is most likely not required
+# smtp_user =
+# smtp_password =

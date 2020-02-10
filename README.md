@@ -3,11 +3,15 @@
 WSIG python script to update dns records via plesk.
 
 If your webserver is managed by plesk, this script allows you to provide your own DynDNS service.
+### Features
+- ipv6 and ipv4 support
+- limit user to certain domains or host records
+- Email Notification if record changed
 
 ## Functionality
 
-As the webserver user is not allowed to update the DNS settings in plesk the funktionality need to be splitted into two taks. 
-1. Web Interface: Receiving update requestion via http(s) request as WSIG service and writing this request to a queue in the file system.
+As the webserver user is not allowed to update the DNS settings in plesk the functionality need to be splitted into two tasks. 
+1. Web Interface: Receiving update request via http(s) request as WSIG service and writing this request to a queue in the file system.
 2. Background Job: Checking the queue and send update to plesk via `plesk cli ...` command line (unfortunately there is no rest API to that in Onyx 17.8) as root.
 
 The script `dyndns.py` covers most of the two tasks.
@@ -15,7 +19,7 @@ The script `dyndns.py` covers most of the two tasks.
 ## Requirements
 - DNS manged by plesk 
   - subdomain for dynamic records recommended
-  - dynmic DNS records must be created manually before updated by this script
+  - dynamic DNS records must be created manually before updated by this script
 - webserver running python via WSIG, tested with phusion passenger  
 - root access to your server
 
@@ -39,7 +43,7 @@ pip install watchdog
 ```
 
 Rename `dyndns_config.py.sample` to `dyndns_config.py` and customizes to your needs. Details about the config, see below.
-The `passenger_wsgi.py` is customized with the function `application` which calles the `update` function in dyndns.py with the right parameters. If you using another WSIG server, this funktion may need some customizations. 
+The `passenger_wsgi.py` is customized with the function `application` which calls the `update` function in dyndns.py with the right parameters. If you using another WSIG server, this function may need some customizations. 
 
 Make sure you have created the queue directory you have specified in `dyndns_config.py`.
 
@@ -85,7 +89,7 @@ There are 3 ways to run the background job to process updates.
 2. `--timeout ##` Will run for `##` seconds and monitors the queue directory while running. Update will be send to plesk as they where written into the queue. Use this to run the job from cron. E.g. run it once an hour with a timeout of 3570 seconds. 
 like `11  * * * * /var/www/vhosts/example.com/dyn.example.com/pyroot/python-app-venv/bin/python /var/www/vhosts/example.com/dyn.example.com/pyroot/dyndns.py`
 --timeout 3570`
-3. Without any parameter it runs as foreground processen and continiously processes updates. You can use this to create a servie with system ctl. Or run it with `nohup` or `screen`.
+3. Without any parameter it runs as foreground process and continuously processes updates. You can use this to create a servie with system ctl. Or run it with `nohup` or `screen`.
 
 ## Security
 
@@ -115,4 +119,4 @@ loglevel = logging.INFO
 
 ## Todo
 - mapping between user and allowed hostnames.
-- sending email notifications if DNS update occured
+- sending email notifications if DNS update occurred
