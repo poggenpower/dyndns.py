@@ -292,12 +292,13 @@ def read_queued_files(entries):
             if not is_valid_ipv6_address(ip):
                 logging.error('IP {}, is not valid, ignore'.format(ip))
                 continue
-        updates[host][type]=ip
+        if not updates.get(host): updates[host] = {}
+        updates[host][type] = ip
         if __update_plesk(host, ip, type):
-            updates[host]['status']=True
+            updates[host]['status'] = True
             os.remove(path)
         else:
-            updates[host]['status']=False
+            updates[host]['status'] = False
             os.rename(path, path + '.error')
 
     for fqdn in updates.keys():
