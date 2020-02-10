@@ -24,5 +24,9 @@ dyndns_config.domain_access_user = []
 # smtp_recipient = 'dyndns@example.com'
 # smtp_server = 'smtp.example.com'
 # smtp_port = 465 # 25: plain, 465 for SSL,
-# smtp_mode = 'ssl' # ssl or plain
+# smtp_mode = 'ssl' # ssl or plain, if ssl certificate will be validated.
 # smtp_sender = 'dyndns.py@expample.com' # sender of the notification email.
+## If authentication is required you can give the credentials here.
+## If emails delivered locally, authentication is most likely not required
+# smtp_user =
+# smtp_password =
