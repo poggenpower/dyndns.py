@@ -20,8 +20,8 @@ dyndns_config.domain_access_user = []
 
 ### Email Notification
 ## if smtp_recipient is set email notification for changes will be send, other options are also required.
-# smtp_recipient = dyndns@example.com
-# smtp_server = smtp.example.com
+# smtp_recipient = 'dyndns@example.com'
+# smtp_server = 'smtp.example.com'
 # smtp_port = 465 # 25: plain, 465 for SSL,
-# smtp_mode = ssl # ssl or plain
-# smtp_sender = dyndns.py@expample.com # sender of the notification email.
+# smtp_mode = 'ssl' # ssl or plain
+# smtp_sender = 'dyndns.py@expample.com' # sender of the notification email.

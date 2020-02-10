@@ -1,18 +1,20 @@
-import dyndns_config
-import socket
-import os
+import argparse
 import glob
+import logging
+import os
+import smtplib
+import socket
+import ssl
 import subprocess
 import tempfile
-from stat import S_ISREG, ST_CTIME, ST_MODE
 import time
-import smtplib, ssl
-
 from collections import namedtuple
-from watchdog.observers import Observer
+from stat import S_ISREG, ST_CTIME, ST_MODE
+
 from watchdog.events import FileSystemEventHandler
-import argparse
-import logging
+from watchdog.observers import Observer
+
+import dyndns_config
 
 log_file_name = os.path.splitext(os.path.basename(__file__))[0]
 logging.basicConfig(
@@ -51,6 +53,7 @@ def update(host="NOTHING", ipv4=None, ipv6=None, use_source=False, user=None):
         try:
             if dns_is_changed(host, ip):
                 result += write_queue_file(queue_path, host, ip, ips[ip])
+                logging.info("DNS update queued. msg: {}".format(result))
             else:
                 result += "No update needed, ip {} already set".format(ip)
         except socket.gaierror:
