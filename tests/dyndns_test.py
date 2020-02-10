@@ -15,6 +15,8 @@ def test_is_resolvable(hostname, expected):
     ('host1.dyn2.example.com', 'd_admin@dyn.example.com', False),
     ('host1.dyn.example.com', 'host1@dyn.example.com', True),
     ('host1.dyn.example.com', 'host2@dyn.example.com', False),
+    ('host1.dyn.example.com', None, False),
+    ('host1.dyn.example.com', '', False),
 ])
 def test_validate_user(host, user, expected):
     import dyndns_config

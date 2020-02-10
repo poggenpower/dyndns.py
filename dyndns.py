@@ -78,6 +78,9 @@ def validate_user(host, user):
     if hasattr(dyndns_config, 'disable_user_authorization') and dyndns_config.disable_user_authorization:
         logging.warning("User authorization disabled. Any user even anonymous is allowed!")
         return True
+    if not user:
+        logging.error('User is invalid. User: {}'.format(user))
+        return False
     if hasattr(dyndns_config, 'full_access_user') and user in dyndns_config.full_access_user:
         logging.info("User {} is allowed to change any record.".format(user))
         return True
