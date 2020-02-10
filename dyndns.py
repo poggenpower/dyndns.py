@@ -357,7 +357,7 @@ class Handler(FileSystemEventHandler):
 
 
 def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updated"):
-    if not dyndns_config.smtp_enable:
+    if not hasattr(dyndns_config, 'smtp_enabled') and not dyndns_config.smtp_enabled:
         return
     for smtp_cfg in ('smtp_server', 'smtp_port', 'smtp_mode', 'smtp_sender'):
         if not hasattr(dyndns_config, smtp_cfg):
