@@ -120,3 +120,4 @@ loglevel = logging.INFO
 ## Todo
 - mapping between user and allowed hostnames.
 - sending email notifications if DNS update occurred
+- push DNS changes via API instead of plesk CLI with root permissions, like https://github.com/KminekMatej/Plesk-Certbot-Api-Hooks/blob/main/plesk-api-prehook.sh
