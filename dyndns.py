@@ -27,42 +27,74 @@ logging.basicConfig(
 )
 
 
-def update(host="NOTHING", ipv4=None, ipv6=None, use_source=False, user=None):
-    result = 'host: {}, IPv4: {}, IPv6: {}\n'.format(
-        host, is_valid_ipv4_address(ipv4), is_valid_ipv6_address(ipv6))
-    # result += '{}/n {}/n'.format(dir(req), req.document_root())
-    if not validate_user(host, user):
-        return "User {} not authorized".format(user)
+def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, user=None):
+    """
+    writes record to updated DNS
+    host: FQDN of the DNS record to update
+    use_source: should by either false or the IP the request came from
+    myip: either ipv6 or ipv4 address (compatibility to DYNDNS2 protocol)
+    ipv4: IPv4 Address
+    ipv6: IPv6 Address 
 
+    use_source overwrites myip overwrites ipvX
+    """
+    mainip = None
+    if not validate_user(host, user):
+        return ("badauth", mainip, "User {} not authorized".format(user))
+
+    single_ip = ""
     if use_source:
-        ip = use_source
-        if ':' in ip:
-            ipv6 = ip
+        single_ip = use_source
+    elif myip:
+        single_ip = myip
+
+    if single_ip:
+        if ':' in single_ip:
+            ipv6 = single_ip
         else:
-            ipv4 = ip
+            ipv4 = single_ip
     ips = dict()
+    valid_address_found = False
     if is_valid_ipv4_address(ipv4):
         ips[ipv4] = 'A'
+        valid_address_found = True
 
     if is_valid_ipv6_address(ipv6):
         ips[ipv6] = 'AAAA'
+        valid_address_found = True
+
+    if not valid_address_found:
+        return ("error", mainip, "No valid Address found, update canceled.")
 
     # queue_path = get_queue_path(os.path.dirname(req.filename))
     queue_path = get_queue_path("")
+    result = 'host: {}, IPs: {}\n'.format(host, ips)
+    status="unkown"
     for ip in ips.keys():
         try:
             if dns_is_changed(host, ip):
                 result += write_queue_file(queue_path, host, ip, ips[ip])
+                status = "good"
                 logging.info("DNS update queued. msg: {}".format(result))
             else:
                 result += "No update needed, ip {} already set".format(ip)
+                status = "nochg"
+                logging.debug("No update needed, ip {} already set".format(ip))
         except socket.gaierror:
-            result += "Can't resolve {}".format(host)
+            msg = "Can't resolve {}".format(host)
+            result += msg
+            logging.error(msg)
+            status = "error"
             break
         except TypeError:
-            result += "Can't resolve {}, wrong format. ".format(host)
+            msg = "Can't resolve {}, wrong format. ".format(host)
+            result += msg
+            logging.error(msg)
+            status = "dnserr"
+        mainip = ip
 
-    return result
+
+    return (status, mainip, result)
 
 
 def validate_user(host, user):
@@ -155,8 +187,11 @@ def write_queue_file(path, host, ip, type):
     try:
         with open(file_name, 'w') as queue_file:
             queue_file.write('{},{},{}'.format(host, ip, type))
+            logging.debug("Queuefile: {} written.".format(queue_file))
     except IOError:
-        return "Can't access {}, create directory and make sure permissions are set correct.".format(file_name)
+        msg = "Can't access {}, create directory and make sure permissions are set correct.".format(file_name)
+        logging.exception(msg)
+        return msg
     return "Update for {} queued".format(host)
 
 
