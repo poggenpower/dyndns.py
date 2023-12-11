@@ -1,5 +1,6 @@
 import argparse
 import glob
+import ipaddress
 import logging
 import os
 import smtplib
@@ -26,6 +27,21 @@ logging.basicConfig(
     ]
 )
 
+def get_dns_info(hostname):
+    try:
+        results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC)
+        ip_addresses = []
+
+        for result in results:
+            family, _, _, _, sockaddr = result
+            address = ipaddress.ip_address(sockaddr[0])
+
+            ip_addresses.append(address)
+            logging.debug(f"Host {hostname} resolved to {address}")
+        return ip_addresses
+    except socket.gaierror as e:
+        logging.error(f"Error: Unable to resolve '{hostname}': {e}")
+        return []
 
 def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, user=None):
     """
@@ -71,6 +87,7 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
     result = 'host: {}, IPs: {}\n'.format(host, ips)
     status="unkown"
     for ip in ips.keys():
+        logging.debug(f"Plan update for ip: {ip}")
         try:
             if dns_is_changed(host, ip):
                 result += write_queue_file(queue_path, host, ip, ips[ip])
@@ -135,10 +152,7 @@ def validate_user(host, user):
 
 
 def dns_is_changed(host, ip):
-    for l in socket.getaddrinfo(host, 0):
-        if l[4][0] == ip:
-            return False
-    return True
+    return True if ipaddress.ip_address(ip) not in get_dns_info(host) else False
 
 
 def is_resolvable(host):
@@ -294,10 +308,14 @@ def __update_plesk(host, ip, type):
 
 def get_queued_files():
     queue_path = get_queue_path(os.path.dirname(os.path.realpath(__file__)))
+    logging.debug(f"Queue path: {queue_path}")
 
     # get all entries in the directory w/ stats
     entries = glob.glob(os.path.join(queue_path, '*.update'))
     entries = ((os.stat(path), path) for path in entries)
+
+    #for e in entries:
+    #    logging.debug(f"{e}")
 
     # leave only regular files, insert creation date
     entries = ((stat[ST_CTIME], path)
@@ -311,7 +329,7 @@ def get_queued_files():
 def read_queued_files(entries):
     updates = {}
     for cdate, path in sorted(entries):
-        logging.debug('{}\t{}'.format(time.ctime(cdate), path))
+        logging.debug('Picking {}\t{} from queue.'.format(time.ctime(cdate), path))
         with open(path, 'r') as dns_update:
             try:
                 (host, ip, type) = dns_update.read().split(',')

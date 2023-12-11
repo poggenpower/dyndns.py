@@ -2,7 +2,7 @@
 dyndns_config.py
 python-app-venv/
 tmp/
-
+passenger_wsgi.log*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
