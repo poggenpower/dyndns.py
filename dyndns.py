@@ -44,6 +44,8 @@ def get_dns_info(hostname):
         A list of IPv4/IPv6 address objects resolved for the hostname, or an empty
         list if resolution fails.
     """
+    if not hostname:
+        return []
     try:
         results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC)
         ip_addresses = []
@@ -55,7 +57,7 @@ def get_dns_info(hostname):
             ip_addresses.append(address)
             logging.debug(f"Host {hostname} resolved to {address}")
         return ip_addresses
-    except socket.gaierror as e:
+    except (socket.gaierror, TypeError, ValueError) as e:
         logging.error(f"Error: Unable to resolve '{hostname}': {e}")
         return []
 
@@ -80,6 +82,11 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
     Returns:
         A tuple of ``(status, mainip, result_text)`` describing the update attempt.
     """
+    if isinstance(ipv4, str):
+        ipv4 = ipv4.strip()
+    if isinstance(ipv6, str):
+        ipv6 = ipv6.strip()
+
     mainip = None
     if not validate_user(host, user):
         return ("badauth", mainip, "User {} not authorized".format(user))
@@ -89,6 +96,11 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
         single_ip = use_source
     elif myip:
         single_ip = myip
+    elif isinstance(use_source, bool) and use_source:
+        # A boolean flag alone is not enough to determine the client IP. Keep the
+        # older behaviour predictable by ignoring the flag when no source address is
+        # provided explicitly.
+        single_ip = ""
 
     if single_ip:
         if ':' in single_ip:
@@ -111,7 +123,7 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
     # queue_path = get_queue_path(os.path.dirname(req.filename))
     queue_path = get_queue_path("")
     result = 'host: {}, IPs: {}\n'.format(host, ips)
-    status="unkown"
+    status = "unknown"
     for ip in ips.keys():
         logging.debug(f"Plan update for ip: {ip}")
         try:
@@ -161,33 +173,63 @@ def validate_user(host, user):
      - host matches the user, "test.dyndns.example.com" == "test@dyndns.example.com"
 
     """
-    if hasattr(dyndns_config, 'disable_user_authorization') and dyndns_config.disable_user_authorization: # type: ignore
-        logging.warning("User authorization disabled. Any user even anonymous is allowed!")
+    if (
+        hasattr(dyndns_config, 'disable_user_authorization')
+        and dyndns_config.disable_user_authorization
+    ):
+        logging.warning(
+            "User authorization disabled. Any user even anonymous is allowed!"
+        )
         return True
-    if not user:
-        logging.error('User is invalid. User: {}'.format(user))
+    if not host or not user:
+        logging.error('User is invalid. Host: %s User: %s', host, user)
         return False
-    if hasattr(dyndns_config, 'full_access_user') and user in dyndns_config.full_access_user:
-        logging.info("User {} is allowed to change any record.".format(user))
-        return True
-    if hasattr(dyndns_config, 'domain_access_user') and user in dyndns_config.domain_access_user:
-        if user.endswith(domain_from_fqdn(host)):
-            logging.info('User {} is allowed to change any record in {}'.format(user, domain_from_fqdn(host)))
+
+    normalized_host = str(host).strip().rstrip('.')
+    normalized_user = str(user).strip()
+
+    if hasattr(dyndns_config, 'full_access_user'):
+        full_access_users = {
+            str(value).strip() for value in dyndns_config.full_access_user
+        }
+        if normalized_user in full_access_users:
+            logging.info("User {} is allowed to change any record.".format(user))
             return True
-        else:
-            logging.warning('User {} not authorized for domain {}'.format(user, domain_from_fqdn(host)))
+
+    if hasattr(dyndns_config, 'domain_access_user'):
+        domain_access_users = {
+            str(value).strip() for value in dyndns_config.domain_access_user
+        }
+        if normalized_user in domain_access_users:
+            host_domain = domain_from_fqdn(normalized_host)
+            if normalized_user.endswith(host_domain):
+                logging.info(
+                    'User {} is allowed to change any record in {}'.format(
+                        user, host_domain
+                    )
+                )
+                return True
+            logging.warning(
+                'User {} not authorized for domain {}'.format(user, host_domain)
+            )
             return False
-    if user.replace('@', '.').lower() == host.rstrip('.'):
+
+    if normalized_user.replace('@', '.') == normalized_host:
         logging.debug('User {} allowed to update {}.'.format(user, host))
         return True
-    else:
-        logging.warning("User {} doesn't match {}, access denied.".format(user, host))
-        return False
+
+    logging.warning("User {} doesn't match {}, access denied.".format(user, host))
+    return False
 
 
 def dns_is_changed(host, ip):
     """Return whether a host has a different current DNS IP than the supplied one."""
-    return True if ipaddress.ip_address(ip) not in get_dns_info(host) else False
+    try:
+        resolved_ip = ipaddress.ip_address(ip)
+    except ValueError:
+        logging.warning('Ignoring invalid IP address %s for host %s', ip, host)
+        return True
+    return resolved_ip not in get_dns_info(host)
 
 
 def is_resolvable(host):
@@ -333,7 +375,13 @@ def domain_from_fqdn(fqdn):
     Returns:
         The domain segment after the first hostname label.
     """
-    return fqdn.rstrip('.').split('.', 1)[1]
+    if not fqdn:
+        return ''
+
+    normalized = str(fqdn).strip().rstrip('.').lower()
+    if '.' not in normalized:
+        return normalized
+    return normalized.split('.', 1)[1]
 
 
 def __update_plesk(host, ip, type):
@@ -517,7 +565,7 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
         ipv4: New IPv4 address, if any.
         ipv6: New IPv6 address, if any.
     """
-    if not hasattr(dyndns_config, 'smtp_enabled') and not dyndns_config.smtp_enabled:
+    if not hasattr(dyndns_config, 'smtp_enabled') or not dyndns_config.smtp_enabled:
         return
     for smtp_cfg in ('smtp_server', 'smtp_port', 'smtp_mode', 'smtp_sender'):
         if not hasattr(dyndns_config, smtp_cfg):
