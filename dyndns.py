@@ -1,3 +1,10 @@
+"""Queue-based dynamic DNS updater for Plesk-managed domains.
+
+This module exposes helper functions for validating users, checking whether a
+DNS record already matches the requested address, writing queued update files,
+and processing those queued updates through the Plesk CLI.
+"""
+
 import argparse
 import glob
 import ipaddress
@@ -28,6 +35,15 @@ logging.basicConfig(
 )
 
 def get_dns_info(hostname):
+    """Return the resolved IP addresses for a hostname.
+
+    Args:
+        hostname: The DNS name to resolve.
+
+    Returns:
+        A list of IPv4/IPv6 address objects resolved for the hostname, or an empty
+        list if resolution fails.
+    """
     try:
         results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC)
         ip_addresses = []
@@ -43,23 +59,33 @@ def get_dns_info(hostname):
         logging.error(f"Error: Unable to resolve '{hostname}': {e}")
         return []
 
-def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, user=None):
-    """
-    writes record to updated DNS
-    host: FQDN of the DNS record to update
-    use_source: should by either false or the IP the request came from
-    myip: either ipv6 or ipv4 address (compatibility to DYNDNS2 protocol)
-    ipv4: IPv4 Address
-    ipv6: IPv6 Address 
+def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, user=None,
+           ipv6_suffix=False):
+    """Queue a DNS update for a host based on the supplied IP data.
 
-    use_source overwrites myip overwrites ipvX
+    The function validates the caller, normalizes the supplied IP addresses, and
+    enqueues an update for each valid record that differs from the current DNS
+    state.
+
+    Args:
+        host: Fully qualified domain name of the record to update.
+        ipv4: IPv4 address to apply to the A record.
+        ipv6: IPv6 address to apply to the AAAA record.
+        myip: Legacy single-address option for DYNDNS2 compatibility.
+        use_source: Source IP address to use when provided as a string.
+        user: Username requesting the update.
+        ipv6_suffix: If True, update the AAAA record on a host with the
+            ``-ipv6`` label suffix rather than the root hostname.
+
+    Returns:
+        A tuple of ``(status, mainip, result_text)`` describing the update attempt.
     """
     mainip = None
     if not validate_user(host, user):
         return ("badauth", mainip, "User {} not authorized".format(user))
 
     single_ip = ""
-    if use_source:
+    if isinstance(use_source, str) and use_source:
         single_ip = use_source
     elif myip:
         single_ip = myip
@@ -89,8 +115,16 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
     for ip in ips.keys():
         logging.debug(f"Plan update for ip: {ip}")
         try:
-            if dns_is_changed(host, ip):
-                result += write_queue_file(queue_path, host, ip, ips[ip])
+            update_host = host
+            if ips[ip] == 'AAAA' and ipv6_suffix:
+                trailing_dot = '.' if host.endswith('.') else ''
+                hostname = host[:-1] if trailing_dot else host
+                first_label, separator, domain = hostname.partition('.')
+                update_host = '{}-ipv6{}{}{}'.format(
+                    first_label, separator, domain, trailing_dot
+                )
+            if dns_is_changed(update_host, ip):
+                result += write_queue_file(queue_path, update_host, ip, ips[ip])
                 status = "good"
                 logging.info("DNS update queued. msg: {}".format(result))
             else:
@@ -127,7 +161,7 @@ def validate_user(host, user):
      - host matches the user, "test.dyndns.example.com" == "test@dyndns.example.com"
 
     """
-    if hasattr(dyndns_config, 'disable_user_authorization') and dyndns_config.disable_user_authorization:
+    if hasattr(dyndns_config, 'disable_user_authorization') and dyndns_config.disable_user_authorization: # type: ignore
         logging.warning("User authorization disabled. Any user even anonymous is allowed!")
         return True
     if not user:
@@ -152,10 +186,12 @@ def validate_user(host, user):
 
 
 def dns_is_changed(host, ip):
+    """Return whether a host has a different current DNS IP than the supplied one."""
     return True if ipaddress.ip_address(ip) not in get_dns_info(host) else False
 
 
 def is_resolvable(host):
+    """Check whether a hostname resolves without raising a DNS lookup error."""
     try:
         socket.getaddrinfo(host, 0)
         return True
@@ -168,6 +204,14 @@ def is_resolvable(host):
 
 
 def is_valid_ipv4_address(address):
+    """Validate an IPv4 address string.
+
+    Args:
+        address: Candidate IPv4 address.
+
+    Returns:
+        True if the address is syntactically valid IPv4, otherwise False.
+    """
     try:
         socket.inet_pton(socket.AF_INET, address)
     except AttributeError:  # no inet_pton here, sorry
@@ -185,6 +229,14 @@ def is_valid_ipv4_address(address):
 
 
 def is_valid_ipv6_address(address):
+    """Validate an IPv6 address string.
+
+    Args:
+        address: Candidate IPv6 address.
+
+    Returns:
+        True if the address is syntactically valid IPv6, otherwise False.
+    """
     try:
         socket.inet_pton(socket.AF_INET6, address)
     except socket.error:  # not a valid address
@@ -195,21 +247,39 @@ def is_valid_ipv6_address(address):
 
 
 def write_queue_file(path, host, ip, type):
-    temp_name = next(tempfile._get_candidate_names()) + ".update"
-    file_name = os.path.join(path, temp_name)
+    """Write a queued DNS update record to the configured directory.
 
+    Args:
+        path: Destination directory for the queued update file.
+        host: Hostname to update.
+        ip: IP address to write.
+        type: DNS record type, typically ``A`` or ``AAAA``.
+
+    Returns:
+        A success message or the filesystem error message if the queue cannot be
+        written.
+    """
     try:
-        with open(file_name, 'w') as queue_file:
+        with tempfile.NamedTemporaryFile(
+            mode='w',
+            prefix='dyndns_',
+            suffix='.update',
+            dir=path,
+            delete=False,
+            encoding='utf-8'
+        ) as queue_file:
             queue_file.write('{},{},{}'.format(host, ip, type))
-            logging.debug("Queuefile: {} written.".format(queue_file))
-    except IOError:
-        msg = "Can't access {}, create directory and make sure permissions are set correct.".format(file_name)
+            logging.debug("Queuefile: {} written.".format(queue_file.name))
+            file_name = queue_file.name
+    except (IOError, OSError):
+        msg = "Can't access {}, create directory and make sure permissions are set correct.".format(path)
         logging.exception(msg)
         return msg
     return "Update for {} queued".format(host)
 
 
 def get_queue_path(script_path):
+    """Resolve the queue directory from either an absolute or relative configuration path."""
     if dyndns_config.queue_dir.startswith('/'):
         logging.debug('Absolute path to queue given.')
         return dyndns_config.queue_dir
@@ -218,6 +288,11 @@ def get_queue_path(script_path):
 
 
 def ipv6_explode_str(ip):
+    """Expand an IPv6 address into a normalized 8-hextet string.
+
+    This helper is primarily used for comparing and formatting IPv6 addresses in
+    a predictable form.
+    """
     ts = ip.split(':')
     i6 = ['0000'] * 8
     space_count = 8 - len(ts) + 1
@@ -235,6 +310,7 @@ def ipv6_explode_str(ip):
 
 
 def __change_plesk_dns(cmd, domain, host, ip, type):
+    """Execute a single Plesk DNS record change command for a given host."""
     hostname = host.split('.', 1)[0]
     cmd_switch = "{} {}".format(cmd, domain)
     type_switch = "{} {}".format(type.lower(), hostname)
@@ -249,15 +325,19 @@ def __change_plesk_dns(cmd, domain, host, ip, type):
 
 
 def domain_from_fqdn(fqdn):
-    """
-    strips of hostname from FQDN. 
-    Strips also pending `.` if there
-    If there is no hostpart `IndexError` will be thrown
+    """Return the parent domain from a fully-qualified domain name.
+
+    Args:
+        fqdn: The FQDN to strip down to its domain part.
+
+    Returns:
+        The domain segment after the first hostname label.
     """
     return fqdn.rstrip('.').split('.', 1)[1]
 
 
 def __update_plesk(host, ip, type):
+    """Add or update a DNS record in Plesk for the supplied host and IP."""
     if not host.endswith('.'):
         host = host + '.'
     if not is_resolvable(host):
@@ -307,6 +387,12 @@ def __update_plesk(host, ip, type):
 
 
 def get_queued_files():
+    """List queued DNS update files sorted by creation time.
+
+    Returns:
+        A generator yielding ``(creation_time, path)`` tuples for valid update
+        files in the queue directory.
+    """
     queue_path = get_queue_path(os.path.dirname(os.path.realpath(__file__)))
     logging.debug(f"Queue path: {queue_path}")
 
@@ -327,6 +413,12 @@ def get_queued_files():
 
 
 def read_queued_files(entries):
+    """Process queued host update files and apply each change via Plesk.
+
+    Args:
+        entries: Iterable of ``(creation_time, path)`` tuples returned by
+            ``get_queued_files``.
+    """
     updates = {}
     for cdate, path in sorted(entries):
         logging.debug('Picking {}\t{} from queue.'.format(time.ctime(cdate), path))
@@ -336,6 +428,7 @@ def read_queued_files(entries):
             except ValueError:
                 logging.error("Can't parse content of file: {}".format(path))
                 os.rename(path, path + '.error')
+                continue
         logging.info('Host = {}, IP = {}, Type = {}'.format(host, ip, type))
         if type == 'A':
             if not is_valid_ipv4_address(ip):
@@ -365,13 +458,17 @@ def read_queued_files(entries):
 
 
 class Watcher:
+    """Monitor the update queue directory for newly created DNS change files."""
+
     DIRECTORY_TO_WATCH = get_queue_path(os.path.dirname(os.path.realpath(__file__)))
 
     def __init__(self):
+        """Initialize the file-system observer and timeout state."""
         self.observer = Observer()
         self.timeout = -1
 
     def run(self):
+        """Start the observer loop until the configured timeout is reached."""
         runtime = 0
         event_handler = Handler()
         self.observer.schedule(event_handler, self.DIRECTORY_TO_WATCH)
@@ -389,13 +486,15 @@ class Watcher:
         self.observer.stop()
 
     def set_timeout(self, seconds):
+        """Set the maximum runtime in seconds for the watcher loop."""
         self.timeout = seconds
 
 
 class Handler(FileSystemEventHandler):
+    """Process queue-directory events by reading newly created or modified files."""
 
-    @staticmethod
-    def on_any_event(event):
+    def on_any_event(self, event):
+        """Handle filesystem events for queue updates."""
         if event.is_directory:
             return None
 
@@ -410,6 +509,14 @@ class Handler(FileSystemEventHandler):
 
 
 def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updated"):
+    """Send an email describing the new DNS record values for a host.
+
+    Args:
+        fqdn: Fully qualified domain name that was updated.
+        recipient: Email address to send the notification to.
+        ipv4: New IPv4 address, if any.
+        ipv6: New IPv6 address, if any.
+    """
     if not hasattr(dyndns_config, 'smtp_enabled') and not dyndns_config.smtp_enabled:
         return
     for smtp_cfg in ('smtp_server', 'smtp_port', 'smtp_mode', 'smtp_sender'):
@@ -418,11 +525,12 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
             return
     if dyndns_config.smtp_mode == 'ssl':
         # Create a secure SSL context
-        context = ssl.create_default_context()
-        smtp_server = smtplib.SMTP_SSL
+        smtp_connection = smtplib.SMTP_SSL(
+            dyndns_config.smtp_server, dyndns_config.smtp_port,
+            context=ssl.create_default_context())
     else:
-        context = None
-        smtp_server = smtplib.SMTP
+        smtp_connection = smtplib.SMTP(
+            dyndns_config.smtp_server, dyndns_config.smtp_port)
 
     msg = """Subject: DYNDNS update: {fqdn}
     
@@ -436,7 +544,7 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
       Your DYN DNS Service
     """.format(fqdn=fqdn, IPv4=ipv4, IPv6=ipv6)
 
-    with smtp_server(dyndns_config.smtp_server, dyndns_config.smtp_port, context=context) as server:
+    with smtp_connection as server:
         if hasattr(dyndns_config, 'smtp_user') and hasattr(dyndns_config, 'smtp_password'):
             server.login(dyndns_config.smtp_user, dyndns_config.smtp_password)
         server.sendmail(dyndns_config.smtp_sender, recipient, msg)

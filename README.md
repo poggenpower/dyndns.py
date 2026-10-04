@@ -51,13 +51,14 @@ Make sure you have created the queue directory you have specified in `dyndns_con
 
 Example:
 
-`https://dyn.example.com/?host=host.dyn.example.com&ipv4=123.123.123.123&ipv6=1234:1234::1234&use_source=False`
+`https://dyn.example.com/?host=host.dyn.example.com&ipv4=123.123.123.123&ipv6=1234:1234::1234&ipv6_suffix=true&use_source=False`
 
 Call the web interface with following parameters:
 
 - `host`: FQDN of the DNS record you want to update. Make sure it already exists in the plesk DNS settings.
 - `ipv4` (optional): IPv4 address for the `A` record
 - `ipv6` (optional): IPv6 address for the `AAAA` record. (`ipv4` and `ipv6` can be given at the same time)
+- `ipv6_suffix` (optional): set to `true` to update the `AAAA` record at `host-ipv6.dyn.example.com` instead of `host.dyn.example.com`. The `A` record continues to use `host.dyn.example.com`.
 - `use_source` (optional): if set to `True` there is no need to give the address via parameter. The source address of the request is used automatically. `use_source` has precedence, it overwrites either `ipv4` or `ipv6` if given.  
 
 Response:

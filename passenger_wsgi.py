@@ -27,10 +27,12 @@ def application(environ, start_response):
 
     update_params = dict()
     # get first element of list per qs variable 
-    if qs.get('host'): update_params['host'] = qs.get('host')[0]
-    if qs.get('hostname'): update_params['host'] = qs.get('hostname')[0]
+    if qs.get('host'): update_params['host'] = qs['host'][0]
+    if qs.get('hostname'): update_params['host'] = qs['hostname'][0]
     if qs.get('ipv4'): update_params['ipv4'] = qs['ipv4'][0]
     if qs.get('ipv6'): update_params['ipv6'] = qs['ipv6'][0]
+    if qs.get('ipv6_suffix', ['false'])[0].lower() == 'true':
+        update_params['ipv6_suffix'] = True
     if qs.get('myip'): update_params['myip'] = qs['myip'][0]
     if qs.get('use_source', ['false'])[0].lower() == 'true':
         update_params['use_source'] = environ.get('REMOTE_ADDR')
