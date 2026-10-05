@@ -22,7 +22,7 @@ def application(environ, start_response):
     # Sorting and stringifying the environment key, value pairs
     response_body = []
 
-    qs = parse_qs(environ['QUERY_STRING'])
+    qs = parse_qs(environ['QUERY_STRING'], keep_blank_values=True)
     logging.debug(qs)
 
     update_params = dict()
@@ -31,7 +31,10 @@ def application(environ, start_response):
     if qs.get('hostname'): update_params['host'] = qs['hostname'][0]
     if qs.get('ipv4'): update_params['ipv4'] = qs['ipv4'][0]
     if qs.get('ipv6'): update_params['ipv6'] = qs['ipv6'][0]
-    if qs.get('ipv6_suffix', ['false'])[0].lower() == 'true':
+    suffix_values = qs.get('ipv6_suffix', [])
+    if suffix_values and (
+        suffix_values[0] == '' or suffix_values[0].lower() == 'true'
+    ):
         update_params['ipv6_suffix'] = True
     if qs.get('myip'): update_params['myip'] = qs['myip'][0]
     if qs.get('use_source', ['false'])[0].lower() == 'true':
