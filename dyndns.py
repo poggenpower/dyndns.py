@@ -497,6 +497,7 @@ def read_queued_files(entries):
                 dyndns_config.smtp_recipient,
                 ipv4=updates[fqdn].get('A',    'No Update'),
                 ipv6=updates[fqdn].get('AAAA', 'No Update'),
+                error=not updates[fqdn].get('status', False)
             )
 
 
@@ -551,7 +552,7 @@ class Handler(FileSystemEventHandler):
             logging.debug(f"Received modified event - {event.src_path}.")
 
 
-def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updated"):
+def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updated", error=False):
     """Send an email describing the new DNS record values for a host.
 
     Args:
@@ -559,6 +560,7 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
         recipient: Email address to send the notification to.
         ipv4: New IPv4 address, if any.
         ipv6: New IPv6 address, if any.
+        error: Whether to send an error notification.
     """
     if not hasattr(dyndns_config, 'smtp_enabled') or not dyndns_config.smtp_enabled:
         return
@@ -587,10 +589,25 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
       Your DYN DNS Service
     """
 
+    msg_error = f"""Subject: DYNDNS update failed: {fqdn}
+
+    Dear Admin,
+
+    we failed to update your DNS record for {fqdn}
+    IPv4 address: {ipv4}
+    IPv6 address: {ipv6}
+
+    Bye
+      Your DYN DNS Service
+    """
+
     with smtp_connection as server:
         if hasattr(dyndns_config, 'smtp_user') and hasattr(dyndns_config, 'smtp_password'):
             server.login(dyndns_config.smtp_user, dyndns_config.smtp_password)
-        server.sendmail(dyndns_config.smtp_sender, recipient, msg)
+        if error:
+            server.sendmail(dyndns_config.smtp_sender, recipient, msg_error)
+        else:
+            server.sendmail(dyndns_config.smtp_sender, recipient, msg)
 
 
 if __name__ == '__main__':
