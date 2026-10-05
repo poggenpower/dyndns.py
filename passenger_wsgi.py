@@ -12,7 +12,7 @@ import dyndns
 
 logFormatter = logging.Formatter("%(asctime)s [%(filename)s:%(lineno)s - %(funcName)20s() ] [%(levelname)-5.5s]  %(message)s")
 file_path = os.path.splitext(os.path.realpath(__file__))[0]
-fileHandler = logging.handlers.TimedRotatingFileHandler("{0}.log".format(file_path), when="d", interval=1, backupCount=5 )
+fileHandler = logging.handlers.TimedRotatingFileHandler(f"{file_path}.log", when="d", interval=1, backupCount=5 )
 fileHandler.setFormatter(logFormatter)
 logging.getLogger().addHandler(fileHandler)
 logging.getLogger().setLevel(logging.DEBUG)
@@ -40,16 +40,14 @@ def application(environ, start_response):
 
     status, ip, msg = dyndns.update(**update_params)
         
-    response_body.append(
-        "{} {}".format(status, ip)
-    )
+    response_body.append(f"{status} {ip}")
     if not "dyndns" in qs.get('system',[]):
         response_body.append('################# Verbose Response #################')
         response_body.append(msg)
 
         response_body.append('################# Query String #################')
         response_body.extend(
-            ['%s: %s' % (key, value) for key, value in sorted(qs.items())]
+            [f"{key}: {value}" for key, value in sorted(qs.items())]
         )
 
 

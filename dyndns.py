@@ -29,7 +29,7 @@ logging.basicConfig(
     level=dyndns_config.loglevel,
     format="%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s",
     handlers=[
-        logging.FileHandler("{0}.log".format(log_file_name)),
+        logging.FileHandler(f"{log_file_name}.log"),
         logging.StreamHandler()
     ]
 )
@@ -89,7 +89,7 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
 
     mainip = None
     if not validate_user(host, user):
-        return ("badauth", mainip, "User {} not authorized".format(user))
+        return ("badauth", mainip, f"User {user} not authorized")
 
     single_ip = ""
     if isinstance(use_source, str) and use_source:
@@ -122,7 +122,7 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
 
     # queue_path = get_queue_path(os.path.dirname(req.filename))
     queue_path = get_queue_path("")
-    result = 'host: {}, IPs: {}\n'.format(host, ips)
+    result = f"host: {host}, IPs: {ips}\n"
     status = "unknown"
     for ip in ips.keys():
         logging.debug(f"Plan update for ip: {ip}")
@@ -132,25 +132,23 @@ def update(host="NOTHING", ipv4=None, ipv6=None, myip=None, use_source=False, us
                 trailing_dot = '.' if host.endswith('.') else ''
                 hostname = host[:-1] if trailing_dot else host
                 first_label, separator, domain = hostname.partition('.')
-                update_host = '{}-ipv6{}{}{}'.format(
-                    first_label, separator, domain, trailing_dot
-                )
+                update_host = f"{first_label}-ipv6{separator}{domain}{trailing_dot}"
             if dns_is_changed(update_host, ip):
                 result += write_queue_file(queue_path, update_host, ip, ips[ip])
                 status = "good"
-                logging.info("DNS update queued. msg: {}".format(result))
+                logging.info(f"DNS update queued. msg: {result}")
             else:
-                result += "No update needed, ip {} already set".format(ip)
+                result += f"No update needed, ip {ip} already set"
                 status = "nochg"
-                logging.debug("No update needed, ip {} already set".format(ip))
+                logging.debug(f"No update needed, ip {ip} already set")
         except socket.gaierror:
-            msg = "Can't resolve {}".format(host)
+            msg = f"Can't resolve {host}"
             result += msg
             logging.error(msg)
             status = "error"
             break
         except TypeError:
-            msg = "Can't resolve {}, wrong format. ".format(host)
+            msg = f"Can't resolve {host}, wrong format. "
             result += msg
             logging.error(msg)
             status = "dnserr"
@@ -182,8 +180,10 @@ def validate_user(host, user):
         )
         return True
     if not host or not user:
-        logging.error('User is invalid. Host: %s User: %s', host, user)
+        logging.error(f"User is invalid. Host: {host} User: {user}")
         return False
+    else:
+        logging.debug(f"Validating user {user} for host {host}")
 
     normalized_host = str(host).strip().rstrip('.')
     normalized_user = str(user).strip()
@@ -193,7 +193,7 @@ def validate_user(host, user):
             str(value).strip() for value in dyndns_config.full_access_user
         }
         if normalized_user in full_access_users:
-            logging.info("User {} is allowed to change any record.".format(user))
+            logging.info(f"User {user} is allowed to change any record.")
             return True
 
     if hasattr(dyndns_config, 'domain_access_user'):
@@ -204,21 +204,18 @@ def validate_user(host, user):
             host_domain = domain_from_fqdn(normalized_host)
             if normalized_user.endswith(host_domain):
                 logging.info(
-                    'User {} is allowed to change any record in {}'.format(
-                        user, host_domain
-                    )
+                    f"User {user} is allowed to change any record in {host_domain}"
                 )
                 return True
             logging.warning(
-                'User {} not authorized for domain {}'.format(user, host_domain)
+                f"User {user} not authorized for domain {host_domain}"
             )
-            return False
 
     if normalized_user.replace('@', '.') == normalized_host:
-        logging.debug('User {} allowed to update {}.'.format(user, host))
+        logging.debug(f"User {user} allowed to update {host}.")
         return True
 
-    logging.warning("User {} doesn't match {}, access denied.".format(user, host))
+    logging.warning(f"User {user} doesn't match {host}, access denied.")
     return False
 
 
@@ -227,7 +224,7 @@ def dns_is_changed(host, ip):
     try:
         resolved_ip = ipaddress.ip_address(ip)
     except ValueError:
-        logging.warning('Ignoring invalid IP address %s for host %s', ip, host)
+        logging.warning(f"Ignoring invalid IP address {ip} for host {host}")
         return True
     return resolved_ip not in get_dns_info(host)
 
@@ -238,10 +235,10 @@ def is_resolvable(host):
         socket.getaddrinfo(host, 0)
         return True
     except socket.gaierror:
-        logging.debug("Can't resolve {}".format(host))
+        logging.debug(f"Can't resolve {host}")
         return False
     except TypeError:
-        logging.debug("Can't resolve {}, wrong format. ".format(host))
+        logging.debug(f"Can't resolve {host}, wrong format. ")
         return False
 
 
@@ -310,14 +307,14 @@ def write_queue_file(path, host, ip, type):
             delete=False,
             encoding='utf-8'
         ) as queue_file:
-            queue_file.write('{},{},{}'.format(host, ip, type))
-            logging.debug("Queuefile: {} written.".format(queue_file.name))
+            queue_file.write(f"{host},{ip},{type}")
+            logging.debug(f"Queuefile: {queue_file.name} written.")
             file_name = queue_file.name
     except (IOError, OSError):
-        msg = "Can't access {}, create directory and make sure permissions are set correct.".format(path)
+        msg = f"Can't access {path}, create directory and make sure permissions are set correct."
         logging.exception(msg)
         return msg
-    return "Update for {} queued".format(host)
+    return f"Update for {host} queued"
 
 
 def get_queue_path(script_path):
@@ -354,15 +351,13 @@ def ipv6_explode_str(ip):
 def __change_plesk_dns(cmd, domain, host, ip, type):
     """Execute a single Plesk DNS record change command for a given host."""
     hostname = host.split('.', 1)[0]
-    cmd_switch = "{} {}".format(cmd, domain)
-    type_switch = "{} {}".format(type.lower(), hostname)
-    cmd_line = '/usr/sbin/plesk bin dns --{} -{} -ip {}'.format(cmd_switch, type_switch, ip).split()
-    logging.debug('CMD: {}'.format(' '.join(cmd_line)))
+    cmd_switch = f"{cmd} {domain}"
+    type_switch = f"{type.lower()} {hostname}"
+    cmd_line = f"/usr/sbin/plesk bin dns --{cmd_switch} -{type_switch} -ip {ip}".split()
+    logging.debug(f"CMD: {' '.join(cmd_line)}")
     exit = subprocess.call(cmd_line)
     if exit == 0:
-        logging.info("cmd {} for entry {} {} {} successful".format(
-            cmd, host, type, ip
-        ))
+        logging.info(f"cmd {cmd} for entry {host} {type} {ip} successful")
     return exit
 
 
@@ -389,16 +384,16 @@ def __update_plesk(host, ip, type):
     if not host.endswith('.'):
         host = host + '.'
     if not is_resolvable(host):
-        logging.error('Host {} is not resolvable, ignore')
+        logging.error(f"Host {host} is not resolvable, ignore")
         return False
     domain = domain_from_fqdn(host)
 
     if domain not in dyndns_config.dyn_dns_domains:
-        logging.error('Domain {} not allowed for dynamic updates.'.format(domain))
+        logging.error(f"Domain {domain} not allowed for dynamic updates.")
         return False
 
     lines = subprocess.check_output(
-        '/usr/sbin/plesk bin dns --info {}'.format(domain),
+        f'/usr/sbin/plesk bin dns --info {domain}',
         stderr=subprocess.STDOUT,
         shell=True
     ).decode().split('\n')
@@ -408,7 +403,7 @@ def __update_plesk(host, ip, type):
         try:
             (p_host, p_type, p_ip) = line.split()
             dns_records.append(dns_record(host=p_host, type=p_type, ip=p_ip))
-            logging.debug('Found following record {}.'.format(line))
+            logging.debug(f"Found following record {line}.")
         except ValueError:
             # logging.debug('ignore line: {}'.format(line))
             pass
@@ -469,22 +464,22 @@ def read_queued_files(entries):
     """
     updates = {}
     for cdate, path in sorted(entries):
-        logging.debug('Picking {}\t{} from queue.'.format(time.ctime(cdate), path))
+        logging.debug(f"Picking {time.ctime(cdate)}\t{path} from queue.")
         with open(path, 'r') as dns_update:
             try:
                 (host, ip, type) = dns_update.read().split(',')
             except ValueError:
-                logging.error("Can't parse content of file: {}".format(path))
+                logging.error(f"Can't parse content of file: {path}")
                 os.rename(path, path + '.error')
                 continue
-        logging.info('Host = {}, IP = {}, Type = {}'.format(host, ip, type))
+        logging.info(f"Host = {host}, IP = {ip}, Type = {type}")
         if type == 'A':
             if not is_valid_ipv4_address(ip):
-                logging.error('IP {}, is not valid, ignore'.format(ip))
+                logging.error(f"IP {ip}, is not valid, ignore")
                 continue
         elif type == 'AAAA':
             if not is_valid_ipv6_address(ip):
-                logging.error('IP {}, is not valid, ignore'.format(ip))
+                logging.error(f"IP {ip}, is not valid, ignore")
                 continue
         if not updates.get(host): updates[host] = {}
         updates[host][type] = ip
@@ -529,7 +524,7 @@ class Watcher:
                     break
         except Exception as e:
             self.observer.stop()
-            logging.exception("Error while watching queue dir. ERROR: {}".format(e))
+            logging.exception(f"Error while watching queue dir. ERROR: {e}")
 
         self.observer.stop()
 
@@ -548,12 +543,12 @@ class Handler(FileSystemEventHandler):
 
         elif event.event_type == 'created':
             # Take any action here when a file is first created.
-            logging.debug("Received created event - %s." % event.src_path)
+            logging.debug(f"Received created event - {event.src_path}.")
             read_queued_files(get_queued_files())
 
         elif event.event_type == 'modified':
             # Taken any action here when a file is modified.
-            logging.debug("Received modified event - %s." % event.src_path)
+            logging.debug(f"Received modified event - {event.src_path}.")
 
 
 def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updated"):
@@ -569,7 +564,7 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
         return
     for smtp_cfg in ('smtp_server', 'smtp_port', 'smtp_mode', 'smtp_sender'):
         if not hasattr(dyndns_config, smtp_cfg):
-            logging.error("SMTP setting missing. Please provide: {}".format(smtp_cfg))
+            logging.error(f"SMTP setting missing. Please provide: {smtp_cfg}")
             return
     if dyndns_config.smtp_mode == 'ssl':
         # Create a secure SSL context
@@ -580,17 +575,17 @@ def send_email_notification(fqdn, recipient, ipv4="Not updated", ipv6="Not updat
         smtp_connection = smtplib.SMTP(
             dyndns_config.smtp_server, dyndns_config.smtp_port)
 
-    msg = """Subject: DYNDNS update: {fqdn}
+    msg = f"""Subject: DYNDNS update: {fqdn}
     
     Dear Admin,
 
     we have updated your DNS record for {fqdn}
-    new IPv4 address: {IPv4}
-    new IPv6 address: {IPv6}
+    new IPv4 address: {ipv4}
+    new IPv6 address: {ipv6}
 
     Bye
       Your DYN DNS Service
-    """.format(fqdn=fqdn, IPv4=ipv4, IPv6=ipv6)
+    """
 
     with smtp_connection as server:
         if hasattr(dyndns_config, 'smtp_user') and hasattr(dyndns_config, 'smtp_password'):
